@@ -1,0 +1,37 @@
+# ========== OS / エディタ ==========
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ========== Node.js / npm ==========
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# ========== ローカル環境・キャッシュ ==========
+.cache/
+.env
+.env.local
+.env.*.local
+
+# ========== ビルド成果物 ==========
+dist/
+build/
+*.bundle.js
+
+# ========== テンポラリ ==========
+*.tmp
+*.bak
+*.backup
+*.log
+
+# ========== Windows ==========
+Thumbs.db
+ehthumbs.db
+Desktop.ini
