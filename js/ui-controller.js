@@ -52,6 +52,9 @@ class UIController {
 
     // コピーボタン
     document.getElementById('copyBtn')?.addEventListener('click', () => this.copyOutput());
+
+    // CSV保存ボタン
+    document.getElementById('saveCsvBtn')?.addEventListener('click', () => this.saveCsv());
   }
 
   /**
@@ -726,6 +729,38 @@ class UIController {
     outputTextarea.select();
     document.execCommand('copy');
     alert('出力をクリップボードにコピーしました');
+  }
+
+  /**
+   * 補間結果をCSVファイルとしてダウンロード
+   */
+  saveCsv() {
+    const outputTextarea = document.getElementById('outputPoints');
+    if (!outputTextarea || !outputTextarea.value.trim()) {
+      alert('保存するデータがありません。先に「実行」してください。');
+      return;
+    }
+
+    // ヘッダー行を付けてCSV文字列を作成
+    const header = 'x,y\n';
+    const csvContent = header + outputTextarea.value.trim();
+
+    // ファイル名：モードと日時を含める
+    const mode = this.currentMode === 'normal' ? 'normal' : 'parametric';
+    const now = new Date();
+    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    const fileName = `spline_${mode}_${ts}.csv`;
+
+    // Blob経由でダウンロード
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   /**
