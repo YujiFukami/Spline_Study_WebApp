@@ -1,7 +1,7 @@
 /**
  * spline-engine.js
  * スプライン補間計算エンジン（VBA実装をJavaScriptに移植）
- * 対応：通常補間、パラメトリック補間
+ * 対応：通常補間、パラメトリック補間、閉曲線補間
  */
 
 class SplineInterpolationEngine {
@@ -11,7 +11,7 @@ class SplineInterpolationEngine {
    * Y = f(X)
    * @param {number[]} xArr - X座標配列（単調増加）
    * @param {number[]} yArr - Y座標配列
-   * @param {number} divNum - 各区間の分割数
+   * @param {number} divNum - 全体範囲の分割数（出力点数 - 1）
    * @returns {Object} { interpolated: [[x,y],...], matrix: A, vector: C, coefficients: coeff, details: {...} }
    */
   static normalSplineInterpolation(xArr, yArr, divNum) {
@@ -125,7 +125,7 @@ class SplineInterpolationEngine {
    * X = x(t), Y = y(t)
    * @param {number[]} xArr - X座標配列
    * @param {number[]} yArr - Y座標配列
-   * @param {number} divNum - 各区間の分割数
+   * @param {number} divNum - 全体パラメータ範囲の分割数（出力点数 - 1）
    * @param {string} paramMode - パラメータ方式 'uniform', 'chordal' (初期は uniform のみ)
    * @returns {Object} { interpolated: [[x,y],...], xEngine: {...}, yEngine: {...}, details: {...} }
    */
@@ -185,12 +185,65 @@ class SplineInterpolationEngine {
         details: {
           n: n,
           divNum: divNum,
-          totalPoints: n * divNum + 1,
+          totalPoints: divNum + 1,
           paramMode: paramMode
         }
       };
     } catch (error) {
       throw new Error(`パラメトリック補間エラー: ${error.message}`);
+    }
+  }
+
+  /**
+   * 閉曲線スプライン補間
+   * 入力点列を周期的に接続し、最終区間から先頭区間へ戻る条件で補間する。
+   * @param {number[]} xArr - X座標配列（末尾に先頭点を重複させない）
+   * @param {number[]} yArr - Y座標配列（末尾に先頭点を重複させない）
+   * @param {number} outputPointCount - 補間後の出力点数
+   * @returns {Object} { interpolated, xEngine, yEngine, matrix, vector, coefficients, details }
+   */
+  static closedSplineInterpolation(xArr, yArr, outputPointCount) {
+    const n = xArr.length;
+    const h = 1 / n;
+    const parameters = [];
+    for (let i = 0; i <= n; i++) {
+      parameters[i] = i * h;
+    }
+
+    try {
+      const totalDivisions = outputPointCount - 1;
+      const xEngine = this._closedSplineCore(xArr, totalDivisions);
+      const yEngine = this._closedSplineCore(yArr, totalDivisions);
+
+      const interpolated = [];
+      for (let i = 0; i < xEngine.interpolated.length; i++) {
+        interpolated.push({
+          x: xEngine.interpolated[i],
+          y: yEngine.interpolated[i]
+        });
+      }
+
+      return {
+        mode: 'closed',
+        interpolated: interpolated,
+        originalPoints: xArr.map((x, i) => ({ x, y: yArr[i] })),
+        parameters: parameters,
+        intervals: Array(n).fill(h),
+        matrix: xEngine.matrix,
+        vector: xEngine.vector,
+        coefficients: xEngine.coefficients,
+        xEngine: xEngine,
+        yEngine: yEngine,
+        details: {
+          n: n,
+          divNum: totalDivisions,
+          outputPointCount: outputPointCount,
+          totalPoints: interpolated.length,
+          h: h
+        }
+      };
+    } catch (error) {
+      throw new Error(`閉曲線補間エラー: ${error.message}`);
     }
   }
 
@@ -278,6 +331,80 @@ class SplineInterpolationEngine {
       vector: vecC,
       coefficients: coeff,
       intervals: dT
+    };
+  }
+
+  /**
+   * 閉曲線補間のコア処理
+   * VBA の Cal__SplineClosed と同じ周期条件で 1 成分を補間する。
+   * @private
+   */
+  static _closedSplineCore(vals, totalDivisions) {
+    const n = vals.length;
+    const h = 1 / n;
+    const matA = this._createMatrix(3 * n, 3 * n);
+    const vecX = this._createMatrix(3 * n, 1);
+
+    // 位置条件: a_k h^3 + b_k h^2 + c_k h = v_{k+1} - v_k
+    for (let k = 0; k < n; k++) {
+      const r = k;
+      const col = 3 * k;
+      const nextK = (k + 1) % n;
+      matA[r][col] = h * h * h;
+      matA[r][col + 1] = h * h;
+      matA[r][col + 2] = h;
+      vecX[r][0] = vals[nextK] - vals[k];
+    }
+
+    // 1階連続（周期）: 3a_k h^2 + 2b_k h + c_k - c_{k+1} = 0
+    for (let k = 0; k < n; k++) {
+      const r = n + k;
+      const col = 3 * k;
+      const nextK = (k + 1) % n;
+      matA[r][col] = 3 * h * h;
+      matA[r][col + 1] = 2 * h;
+      matA[r][col + 2] = 1;
+      matA[r][3 * nextK + 2] = -1;
+    }
+
+    // 2階連続（周期）: 3a_k h + b_k - b_{k+1} = 0
+    for (let k = 0; k < n; k++) {
+      const r = 2 * n + k;
+      const col = 3 * k;
+      const nextK = (k + 1) % n;
+      matA[r][col] = 3 * h;
+      matA[r][col + 1] = 1;
+      matA[r][3 * nextK + 1] = -1;
+    }
+
+    const matAInv = this._inverseMatrix(matA);
+    const coeff = this._matrixMultiply(matAInv, vecX);
+    const interpolated = [];
+
+    for (let i = 0; i <= totalDivisions; i++) {
+      if (i === totalDivisions) {
+        interpolated.push(vals[0]);
+        continue;
+      }
+
+      const t = i / totalDivisions;
+      let seg = Math.floor(t / h);
+      if (seg >= n) seg = n - 1;
+      const localH = t - seg * h;
+      const a = coeff[3 * seg][0];
+      const b = coeff[3 * seg + 1][0];
+      const c = coeff[3 * seg + 2][0];
+      const d = vals[seg];
+
+      interpolated.push(a * localH * localH * localH + b * localH * localH + c * localH + d);
+    }
+
+    return {
+      interpolated: interpolated,
+      matrix: matA,
+      vector: vecX,
+      coefficients: coeff,
+      intervals: Array(n).fill(h)
     };
   }
 

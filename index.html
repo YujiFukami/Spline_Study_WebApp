@@ -6,8 +6,8 @@
   <title>3次スプライン補間 学習・計算ツール｜数式導出からExcel VBA実装まで</title>
 
   <!-- ===== SEO メタタグ ===== -->
-  <meta name="description" content="3次スプライン補間（自然スプライン）の学習・計算ツール。補間の数式導出・行列方程式の組み立て・係数計算をステップごとに可視化。通常補間・パラメトリック補間に対応。Excel VBA実装のサンプルコードも解説。">
-  <meta name="keywords" content="スプライン補間, 3次スプライン補間, 自然スプライン, cubic spline interpolation, スプライン補間 学習, スプライン補間 計算, パラメトリック補間, 数値計算, Excel VBA, VBA スプライン, 行列方程式, 補間曲線, 数学 学習ツール">
+  <meta name="description" content="3次スプライン補間の学習・計算ツール。通常補間、パラメトリック補間、閉曲線補間の数式導出・行列方程式・係数計算をステップごとに可視化。Excel VBA実装記事への参考リンク付き。">
+  <meta name="keywords" content="スプライン補間, 3次スプライン補間, 自然スプライン, 閉曲線スプライン補間, 周期スプライン, closed spline interpolation, cubic spline interpolation, スプライン補間 学習, スプライン補間 計算, パラメトリック補間, 数値計算, Excel VBA, VBA スプライン, 行列方程式, 補間曲線, 数学 学習ツール">
   <meta name="author" content="Softex Celware">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://cubic-spline-learning-tool.netlify.app/">
@@ -15,14 +15,14 @@
   <!-- OGP (SNSシェア用) -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="3次スプライン補間 学習・計算ツール｜数式導出からExcel VBA実装まで">
-  <meta property="og:description" content="3次スプライン補間の数式導出・行列方程式・係数計算をステップごとに可視化。通常補間・パラメトリック補間対応。Excel VBA実装解説付き。">
+  <meta property="og:description" content="3次スプライン補間の数式導出・行列方程式・係数計算をステップごとに可視化。通常補間・パラメトリック補間・閉曲線補間対応。Excel VBA実装解説付き。">
   <meta property="og:url" content="https://cubic-spline-learning-tool.netlify.app/">
   <meta property="og:locale" content="ja_JP">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="3次スプライン補間 学習・計算ツール">
-  <meta name="twitter:description" content="スプライン補間の数式導出から係数計算まで、ステップごとに学べる無料Webツール。Excel VBA実装解説付き。">
+  <meta name="twitter:description" content="通常補間・パラメトリック補間・閉曲線補間の数式導出から係数計算まで、ステップごとに学べる無料Webツール。">
 
   <!-- ファビコン -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -68,6 +68,10 @@
             <input type="radio" id="parametricMode" name="mode" value="parametric">
             <label for="parametricMode">パラメトリック補間</label>
           </div>
+          <div class="radio-item">
+            <input type="radio" id="closedMode" name="mode" value="closed">
+            <label for="closedMode">閉曲線補間</label>
+          </div>
         </div>
         <div id="modeDescription" style="margin-top: 10px;"></div>
       </div>
@@ -83,18 +87,18 @@
           </div>
 
           <div style="margin-bottom: 20px;">
-            <label for="divNum">各区間の分割数:</label>
+            <label for="divNum">補間後の出力点数:</label>
             <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:6px;">
               <button type="button" class="spin-btn" onclick="stepDivNum(-10)">−10</button>
               <button type="button" class="spin-btn" onclick="stepDivNum(-5)">−5</button>
               <button type="button" class="spin-btn" onclick="stepDivNum(-1)">−1</button>
-              <input type="number" id="divNum" value="30" min="1" max="1000"
+              <input type="number" id="divNum" value="30" min="2" max="5000"
                 style="width:70px; text-align:center; -moz-appearance:textfield; appearance:textfield;">
               <button type="button" class="spin-btn" onclick="stepDivNum(1)">+1</button>
               <button type="button" class="spin-btn" onclick="stepDivNum(5)">+5</button>
               <button type="button" class="spin-btn" onclick="stepDivNum(10)">+10</button>
             </div>
-            <small style="color: #666; display: block; margin-top: 8px;">※ 出力点数は（区間数 × 分割数 + 1）になります</small>
+            <small style="color: #666; display: block; margin-top: 8px;">※ 指定した数がCSVに出力される点数になります</small>
           </div>
 
           <!-- ボタングループ -->
@@ -108,6 +112,12 @@
         <!-- 右側: グラフ -->
         <div>
           <label style="margin-bottom: 10px;">グラフ表示</label>
+          <div class="chart-options" aria-label="グラフ表示設定">
+            <label><input type="checkbox" id="showOriginalPoints" checked> 元の点</label>
+            <label><input type="checkbox" id="showInterpolatedLine" checked> 補間曲線</label>
+            <label><input type="checkbox" id="showInterpolatedPoints" checked> 補間後の点</label>
+            <label><input type="checkbox" id="showOriginalLabels"> 元の点の座標</label>
+          </div>
           <div id="chartContainer">
             <canvas id="chartCanvas" width="400" height="300"></canvas>
           </div>
@@ -141,6 +151,11 @@
         以下では <strong>数式の導出（一般式）</strong> と <strong>入力データに基づく実際の数値</strong> を
         ステップごとに対比して表示します。「実行」ボタンを押すと、実際の値の欄が更新されます。
       </p>
+      <div id="componentSelector" class="component-selector" style="display:none;">
+        <span>表示成分</span>
+        <button type="button" class="component-btn active" data-component="x">X(t)</button>
+        <button type="button" class="component-btn" data-component="y">Y(t)</button>
+      </div>
 
       <!-- ===== STEP 0: 概要 ===== -->
       <div class="theory-step">
@@ -154,7 +169,7 @@
           <p>
             通常補間（関数型）では <strong>Y = f(X)</strong>、
             パラメトリック補間では <strong>X = x(t), Y = y(t)</strong> の形で扱います。
-            本アプリは<strong>自然スプライン</strong>（両端の 2 階微分 = 0）を採用しています。
+            閉曲線補間では、最終点から先頭点へ戻る区間も含めた<strong>周期条件</strong>で扱います。
           </p>
           <div id="theory-mode-note" style="margin-top:10px; font-style:italic; color:#0066cc;"></div>
         </div>
@@ -162,17 +177,18 @@
 
       <!-- ===== STEP 1: 区間幅 Δh ===== -->
       <div class="theory-step">
-        <div class="step-label">STEP 1　区間幅 Δh<sub>k</sub> の計算</div>
+        <div class="step-label" id="step1-title">STEP 1　区間幅 Δh<sub>k</sub> の計算</div>
         <div class="step-body">
 
           <!-- 一般式 -->
           <div class="theory-formula" style="border-right:none; padding-right:0;">
             <div class="theory-col-head">一般式</div>
-            <p>
+            <div id="closed-unknown-summary" class="closed-unknown-summary" style="display:none;"></div>
+            <p id="step1-general-description">
               隣り合う入力点の X 座標（またはパラメータ t）の差を<strong>区間幅</strong>と呼びます：
             </p>
-            <div class="formula-box">$$ \Delta h_k = x_{k+1} - x_k \quad (k = 0, 1, \ldots, N-2) $$</div>
-            <p>
+            <div id="step1-formula-box" class="formula-box">$$ \Delta h_k = x_{k+1} - x_k \quad (k = 0, 1, \ldots, N-2) $$</div>
+            <p id="step1-general-note">
               各区間の補間式は、この Δh<sub>k</sub> で正規化されたパラメータ
               \(h = \dfrac{x - x_k}{\Delta h_k}\)（\(0 \le h \le 1\)）で書かれます。
               h = 0 が始点 \(x_k\)、h = 1 が終点 \(x_{k+1}\) です。
@@ -192,21 +208,21 @@
 
       <!-- ===== STEP 2: 区間の 3 次式 ===== -->
       <div class="theory-step">
-        <div class="step-label">STEP 2　区間内の 3 次補間式</div>
+        <div class="step-label" id="step2-title">STEP 2　区間内の 3 次補間式</div>
         <div class="step-body">
 
           <div class="theory-formula" style="border-right:none; padding-right:0;">
-            <div class="theory-col-head">一般式</div>
-            <p>第 k 区間の補間式（\(d_k = y_k\) は既知）：</p>
-            <div class="formula-box">
+            <div class="theory-col-head" id="step2-general-head">一般式</div>
+            <p id="step2-general-description">第 k 区間の補間式（\(d_k = y_k\) は既知）：</p>
+            <div id="step2-formula-box" class="formula-box">
               $$ S_k(h) = a_k h^3 + b_k h^2 + c_k h + d_k $$
             </div>
-            <p>未知係数は各区間につき <strong>a<sub>k</sub>, b<sub>k</sub>, c<sub>k</sub></strong> の 3 つ。
+            <p id="step2-general-note">未知係数は各区間につき <strong>a<sub>k</sub>, b<sub>k</sub>, c<sub>k</sub></strong> の 3 つ。
             N−1 区間合計で <strong>3(N−1)</strong> 個の未知数となります。</p>
           </div>
 
           <div class="theory-values" style="padding-left:0; margin-top:16px; border-top:1px solid #e0e0e0; padding-top:14px;">
-            <div class="theory-col-head">実際の値（各区間の係数）</div>
+            <div class="theory-col-head" id="step2-values-head">実際の値（各区間の係数）</div>
             <div id="val-step2">
               <p class="val-placeholder">← 実行すると値が表示されます</p>
             </div>
@@ -219,31 +235,33 @@
       <div class="theory-step">
         <div class="step-label">STEP 3　連立方程式の組み立て（行列方程式）</div>
         <div class="step-body">
-          <p>
+          <p id="step3-intro">
             3(N−1) 個の未知数を求めるため、以下の条件から同数の方程式を立てます：
           </p>
+
+          <div id="closed-condition-derivation" class="closed-condition-derivation" style="display:none;"></div>
 
           <!-- 条件リスト（折りたたみ） -->
           <div class="cond-grid">
             <div class="cond-item">
               <span class="cond-badge">N−1 本</span>
-              <strong>補間条件</strong>（各区間終点を通る）<br>
-              <span class="formula-inline">\(a_k + b_k + c_k = y_{k+1} - y_k\)</span>
+              <strong>補間条件 / 位置条件</strong>（各区間終点を通る）<br>
+              <span class="formula-inline" data-condition-formula="position">\(a_k + b_k + c_k = y_{k+1} - y_k\)</span>
             </div>
             <div class="cond-item">
               <span class="cond-badge">N−2 本</span>
-              <strong>1 階導関数連続</strong>（内部接合点）<br>
-              <span class="formula-inline">\(\dfrac{3a_k+2b_k+c_k}{\Delta h_k} = \dfrac{c_{k+1}}{\Delta h_{k+1}}\)</span>
+              <strong>1 階導関数連続 / 1階周期条件</strong>（内部接合点）<br>
+              <span class="formula-inline" data-condition-formula="first">\(\dfrac{3a_k+2b_k+c_k}{\Delta h_k} = \dfrac{c_{k+1}}{\Delta h_{k+1}}\)</span>
             </div>
             <div class="cond-item">
               <span class="cond-badge">N−2 本</span>
-              <strong>2 階導関数連続</strong>（内部接合点）<br>
-              <span class="formula-inline">\(\dfrac{6a_k+2b_k}{\Delta h_k^2} = \dfrac{2b_{k+1}}{\Delta h_{k+1}^2}\)</span>
+              <strong>2 階導関数連続 / 2階周期条件</strong>（内部接合点）<br>
+              <span class="formula-inline" data-condition-formula="second">\(\dfrac{6a_k+2b_k}{\Delta h_k^2} = \dfrac{2b_{k+1}}{\Delta h_{k+1}^2}\)</span>
             </div>
             <div class="cond-item">
               <span class="cond-badge">2 本</span>
               <strong>自然境界条件</strong>（両端の 2 階微分 = 0）<br>
-              <span class="formula-inline">\(b_0 = 0,\quad \dfrac{6a_{N-2}+2b_{N-2}}{\Delta h_{N-2}^2} = 0\)</span>
+              <span class="formula-inline" data-condition-formula="boundary">\(b_0 = 0,\quad \dfrac{6a_{N-2}+2b_{N-2}}{\Delta h_{N-2}^2} = 0\)</span>
             </div>
           </div>
 
@@ -331,6 +349,11 @@
                style="color:#0066cc; font-weight:bold; font-size:1.05rem;">
               📖 三次スプライン補間の導出及び Excel VBA での実装
             </a>
+            <br>
+            <a href="https://www.softex-celware.com/post/closed-spline-interpolation-excel-vba" target="_blank"
+               style="color:#0066cc; font-weight:bold; font-size:1.05rem;">
+              📖 閉曲線のスプライン補間｜数式導出からExcel VBAで実装まで
+            </a>
           </p>
         </div>
       </div>
@@ -342,6 +365,11 @@
   <!-- ============ フッター ============ -->
   <footer>
     <p>スプライン補間 学習・計算ツール | VBA実装をJavaScriptで移植</p>
+    <a class="developer-logo-link" href="https://www.softex-celware.com/" target="_blank" rel="noopener"
+       aria-label="開発者 Softex Celware のホームページを開く">
+      <img src="各種リンク/softex-celwareロゴ 透過 横長.png" alt="Softex Celware">
+      <span>開発者サイトを見る</span>
+    </a>
     <p style="margin-top: 8px;">
       <a href="https://cubic-spline-learning-tool.netlify.app/lp/"
          style="color: #a8cfff; text-decoration: none; font-size: 0.9rem;"
@@ -353,16 +381,25 @@
     <p style="margin-top: 8px;">© 2026 All rights reserved.</p>
   </footer>
 
+  <div id="calcDetailModal" class="calc-modal" aria-hidden="true">
+    <div class="calc-modal__backdrop" data-modal-close></div>
+    <div class="calc-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="calcDetailTitle">
+      <button type="button" class="calc-modal__close" data-modal-close aria-label="閉じる">×</button>
+      <h3 id="calcDetailTitle">計算詳細</h3>
+      <div id="calcDetailBody" class="calc-modal__body"></div>
+    </div>
+  </div>
+
   <!-- ============ スクリプト ============ -->
   <script src="js/spline-engine.js"></script>
   <script src="js/ui-controller.js"></script>
 
   <script>
-    // 分割数スピンボタン用ヘルパー
+    // 出力点数スピンボタン用ヘルパー
     function stepDivNum(delta) {
       const el = document.getElementById('divNum');
-      const current = parseInt(el.value) || 1;
-      const next = Math.max(1, Math.min(1000, current + delta));
+      const current = parseInt(el.value) || 30;
+      const next = Math.max(2, Math.min(5000, current + delta));
       el.value = next;
     }
 
@@ -370,6 +407,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       const normalRadio = document.getElementById('normalMode');
       const parametricRadio = document.getElementById('parametricMode');
+      const closedRadio = document.getElementById('closedMode');
 
       // モード変更時のイベント（切替前のモードを prevMode として渡す）
       const updateMode = (e) => {
@@ -382,6 +420,7 @@
 
       normalRadio.addEventListener('change', updateMode);
       parametricRadio.addEventListener('change', updateMode);
+      closedRadio.addEventListener('change', updateMode);
 
       // 初期表示（保存スキップ）
       updateMode();

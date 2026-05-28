@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3次スプライン補間 学習ツール 紹介｜数式導出からExcel VBA実装まで無料で学べる</title>
-  <meta name="description" content="3次スプライン補間を基礎から学べる無料Webツールの紹介記事。行列方程式の組み立て・係数計算・グラフ可視化をブラウザ上で体験。Excel VBA実装コードも解説。">
-  <meta name="keywords" content="スプライン補間, 3次スプライン補間, 学習ツール, Excel VBA, 数値計算, 補間曲線, パラメトリック補間">
+  <meta name="description" content="3次スプライン補間を基礎から学べる無料Webツールの紹介記事。通常補間、パラメトリック補間、閉曲線補間の行列方程式・係数計算・グラフ可視化をブラウザ上で体験。Excel VBA実装コードも解説。">
+  <meta name="keywords" content="スプライン補間, 3次スプライン補間, 学習ツール, Excel VBA, 数値計算, 補間曲線, パラメトリック補間, 閉曲線補間, 周期スプライン">
   <meta name="author" content="Softex Celware">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://cubic-spline-learning-tool.netlify.app/lp/">
@@ -13,14 +13,14 @@
   <!-- OGP -->
   <meta property="og:type" content="article">
   <meta property="og:title" content="3次スプライン補間 学習ツール 紹介｜数式導出からExcel VBA実装まで無料で学べる">
-  <meta property="og:description" content="3次スプライン補間を基礎から学べる無料Webツールの紹介。行列方程式・係数計算・グラフ可視化をブラウザ上で体験。Excel VBA実装解説付き。">
+  <meta property="og:description" content="3次スプライン補間を基礎から学べる無料Webツールの紹介。通常補間・パラメトリック補間・閉曲線補間の行列方程式とグラフをブラウザ上で体験。">
   <meta property="og:url" content="https://cubic-spline-learning-tool.netlify.app/lp/">
   <meta property="og:locale" content="ja_JP">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="3次スプライン補間 学習ツール 紹介">
-  <meta name="twitter:description" content="スプライン補間の数式導出から係数計算まで、ステップごとに学べる無料Webツール。Excel VBA実装解説付き。">
+  <meta name="twitter:description" content="通常補間・パラメトリック補間・閉曲線補間をステップごとに学べる無料Webツール。Excel VBA実装解説付き。">
 
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
   <style>
@@ -364,8 +364,8 @@
         <div class="feature-item">
           <span class="num">機能 1</span>
           <div>
-            <h3>通常補間・パラメトリック補間の両対応</h3>
-            <p>Y = f(X) 形式の通常補間に加え、X が単調増加でないデータやループ状の曲線にも対応したパラメトリック補間（X = x(t), Y = y(t)）が選べます。</p>
+            <h3>通常補間・パラメトリック補間・閉曲線補間に対応</h3>
+            <p>Y = f(X) 形式の通常補間に加え、X が単調増加でないデータ向けのパラメトリック補間、最終点から先頭点へ戻る閉曲線補間が選べます。</p>
           </div>
         </div>
         <div class="feature-item">
@@ -423,8 +423,8 @@
         <div class="step-row">
           <div class="step-circle">3</div>
           <div>
-            <h3>分割数を設定</h3>
-            <p>±1 / ±5 / ±10 のボタンで各区間の細分割数を調整。多いほど滑らかな曲線になります。</p>
+            <h3>出力点数を設定</h3>
+            <p>±1 / ±5 / ±10 のボタンで補間後に出力する点数を調整。指定した点数がそのままCSV出力に反映されます。</p>
           </div>
         </div>
         <div class="step-row">

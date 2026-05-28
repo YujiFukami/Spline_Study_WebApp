@@ -118,6 +118,46 @@ try {
   console.log(`✗ エラー: ${error.message}\n`);
 }
 
+// テストケース4: 閉曲線補間
+console.log('【テストケース4】閉曲線補間 - 周期条件');
+console.log('-----------------------------------------------');
+
+const xArr4 = [3, 2, 0, -2, -3, -1, 1];
+const yArr4 = [0, 2, 3, 2, 0, -2, -2];
+const outputPointCount4 = 29;
+
+try {
+  const result4 = SplineInterpolationEngine.closedSplineInterpolation(xArr4, yArr4, outputPointCount4);
+  const first = result4.interpolated[0];
+  const last = result4.interpolated[result4.interpolated.length - 1];
+  const closedError = Math.hypot(first.x - last.x, first.y - last.y);
+
+  console.log(`入力点数: ${result4.originalPoints.length}`);
+  console.log(`出力点数: ${result4.interpolated.length}`);
+  console.log(`区間数: ${result4.details.n}`);
+  console.log(`行列サイズ: ${result4.matrix.length} x ${result4.matrix[0].length}`);
+  console.log(`始終点誤差: ${closedError.toExponential(3)}`);
+
+  if (result4.matrix.length !== 3 * xArr4.length) {
+    throw new Error('閉曲線の行列サイズが 3N になっていません');
+  }
+  if (result4.interpolated.length !== outputPointCount4) {
+    throw new Error('閉曲線の出力点数が指定値と一致していません');
+  }
+  if (closedError > 1e-10) {
+    throw new Error('閉曲線の始点と終点が一致していません');
+  }
+
+  console.log('\n補間後の点群（最初の10点）:');
+  result4.interpolated.slice(0, 10).forEach((p, i) => {
+    console.log(`  点${i}: (${p.x.toFixed(4)}, ${p.y.toFixed(4)})`);
+  });
+
+  console.log('\n✓ テストケース4成功\n');
+} catch (error) {
+  console.log(`✗ エラー: ${error.message}\n`);
+}
+
 console.log('==============================================');
 console.log('すべてのテストが完了しました');
 console.log('==============================================');
