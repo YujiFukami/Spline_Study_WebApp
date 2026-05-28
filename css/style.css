@@ -373,6 +373,11 @@ table {
   background-color: #ffe9b3 !important;
 }
 
+.row-condition-boundary td,
+.row-condition-boundary th {
+  background-color: #f4f4f5 !important;
+}
+
 .condition-legend {
   display: flex;
   flex-wrap: wrap;
@@ -400,6 +405,7 @@ table {
 .legend-first-loop { background: #d7f5e3; }
 .legend-second { background: #fff8e6; }
 .legend-second-loop { background: #ffe9b3; }
+.legend-boundary { background: #f4f4f5; }
 
 .component-selector {
   display: inline-flex;

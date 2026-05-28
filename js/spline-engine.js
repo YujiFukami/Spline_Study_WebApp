@@ -32,40 +32,41 @@ class SplineInterpolationEngine {
     const matA = this._createMatrix(3 * n, 3 * n);
     const vecC = this._createMatrix(3 * n, 1);
 
-    // 行 1～n: 補間条件（式(5)）a_k + b_k + c_k = y_{k+1} - y_k
+    // 行 1～n: 終点通過条件（記事式(8)）
+    // a_k Δh_k^3 + b_k Δh_k^2 + c_k Δh_k = y_{k+1} - y_k
     for (let k = 0; k < n; k++) {
       const r = k;  // 0-indexed
-      matA[r][3 * k] = 1;      // a_k
-      matA[r][3 * k + 1] = 1;  // b_k
-      matA[r][3 * k + 2] = 1;  // c_k
+      matA[r][3 * k] = dH[k] * dH[k] * dH[k];      // a_k
+      matA[r][3 * k + 1] = dH[k] * dH[k];          // b_k
+      matA[r][3 * k + 2] = dH[k];                  // c_k
       vecC[r][0] = yArr[k + 1] - yArr[k];
     }
 
-    // 行 n～2n-2: 1階導関数連続条件（式(6)）
-    // (3a_k + 2b_k + c_k)/dH_k = c_{k+1}/dH_{k+1}
+    // 行 n～2n-2: 1階導関数連続条件（記事式(9)）
+    // 3a_k Δh_k^2 + 2b_k Δh_k + c_k - c_{k+1} = 0
     for (let k = 0; k < n - 1; k++) {
       const r = n + k;
-      matA[r][3 * k] = 3 / dH[k];      // a_k
-      matA[r][3 * k + 1] = 2 / dH[k];  // b_k
-      matA[r][3 * k + 2] = 1 / dH[k];  // c_k
-      matA[r][3 * (k + 1) + 2] = -1 / dH[k + 1];  // c_{k+1}
+      matA[r][3 * k] = 3 * dH[k] * dH[k];      // a_k
+      matA[r][3 * k + 1] = 2 * dH[k];          // b_k
+      matA[r][3 * k + 2] = 1;                  // c_k
+      matA[r][3 * (k + 1) + 2] = -1;           // c_{k+1}
     }
 
-    // 行 2n-1～3n-2: 2階導関数連続条件（式(7)）
-    // (6a_k + 2b_k)/dH_k^2 = 2b_{k+1}/dH_{k+1}^2
+    // 行 2n-1～3n-2: 2階導関数連続条件（記事式(10)）
+    // 3a_k Δh_k + b_k - b_{k+1} = 0
     for (let k = 0; k < n - 1; k++) {
       const r = 2 * n - 1 + k;
-      matA[r][3 * k] = 6 / (dH[k] * dH[k]);      // a_k
-      matA[r][3 * k + 1] = 2 / (dH[k] * dH[k]);  // b_k
-      matA[r][3 * (k + 1) + 1] = -2 / (dH[k + 1] * dH[k + 1]);  // b_{k+1}
+      matA[r][3 * k] = 3 * dH[k];      // a_k
+      matA[r][3 * k + 1] = 1;          // b_k
+      matA[r][3 * (k + 1) + 1] = -1;   // b_{k+1}
     }
 
     // 行 3n-1: 左端境界（自然スプライン）: b_0 = 0
-    matA[3 * n - 2][1] = 2;
+    matA[3 * n - 2][1] = 1;
 
-    // 行 3n: 右端境界（自然スプライン）: (6a_{n-1} + 2b_{n-1})/dH_{n-1}^2 = 0
-    matA[3 * n - 1][3 * (n - 1)] = 6 / (dH[n - 1] * dH[n - 1]);
-    matA[3 * n - 1][3 * (n - 1) + 1] = 2 / (dH[n - 1] * dH[n - 1]);
+    // 行 3n: 右端境界（自然スプライン）: 3a_{n-1}Δh_{n-1}+b_{n-1}=0
+    matA[3 * n - 1][3 * (n - 1)] = 3 * dH[n - 1];
+    matA[3 * n - 1][3 * (n - 1) + 1] = 1;
 
     // 連立方程式を解く: Coeff = inv(A) * C
     const matAInv = this._inverseMatrix(matA);
@@ -88,8 +89,8 @@ class SplineInterpolationEngine {
         }
       }
 
-      // 正規化パラメータ h（式(2)）
-      const hv = (xv - xArr[kk]) / dH[kk];
+      // 局所変位（x - x_k）
+      const localX = xv - xArr[kk];
 
       // スプライン式の評価（式(3), d_k = y_k）
       const a = coeff[3 * kk][0];
@@ -97,7 +98,7 @@ class SplineInterpolationEngine {
       const c = coeff[3 * kk + 2][0];
       const d = yArr[kk];
 
-      const yv = a * hv * hv * hv + b * hv * hv + c * hv + d;
+      const yv = a * localX * localX * localX + b * localX * localX + c * localX + d;
 
       interpolated.push({ x: xv, y: yv });
     }
@@ -265,36 +266,36 @@ class SplineInterpolationEngine {
     const matA = this._createMatrix(3 * n, 3 * n);
     const vecC = this._createMatrix(3 * n, 1);
 
-    // 補間条件
+    // 終点通過条件: a_k Δt_k^3 + b_k Δt_k^2 + c_k Δt_k = v_{k+1} - v_k
     for (let k = 0; k < n; k++) {
       const r = k;
-      matA[r][3 * k] = 1;
-      matA[r][3 * k + 1] = 1;
-      matA[r][3 * k + 2] = 1;
+      matA[r][3 * k] = dT[k] * dT[k] * dT[k];
+      matA[r][3 * k + 1] = dT[k] * dT[k];
+      matA[r][3 * k + 2] = dT[k];
       vecC[r][0] = vals[k + 1] - vals[k];
     }
 
-    // 1階導関数連続条件
+    // 1階導関数連続条件: 3a_k Δt_k^2 + 2b_k Δt_k + c_k - c_{k+1} = 0
     for (let k = 0; k < n - 1; k++) {
       const r = n + k;
-      matA[r][3 * k] = 3 / dT[k];
-      matA[r][3 * k + 1] = 2 / dT[k];
-      matA[r][3 * k + 2] = 1 / dT[k];
-      matA[r][3 * (k + 1) + 2] = -1 / dT[k + 1];
+      matA[r][3 * k] = 3 * dT[k] * dT[k];
+      matA[r][3 * k + 1] = 2 * dT[k];
+      matA[r][3 * k + 2] = 1;
+      matA[r][3 * (k + 1) + 2] = -1;
     }
 
-    // 2階導関数連続条件
+    // 2階導関数連続条件: 3a_k Δt_k + b_k - b_{k+1} = 0
     for (let k = 0; k < n - 1; k++) {
       const r = 2 * n - 1 + k;
-      matA[r][3 * k] = 6 / (dT[k] * dT[k]);
-      matA[r][3 * k + 1] = 2 / (dT[k] * dT[k]);
-      matA[r][3 * (k + 1) + 1] = -2 / (dT[k + 1] * dT[k + 1]);
+      matA[r][3 * k] = 3 * dT[k];
+      matA[r][3 * k + 1] = 1;
+      matA[r][3 * (k + 1) + 1] = -1;
     }
 
     // 境界条件（自然スプライン）
-    matA[3 * n - 2][1] = 2;
-    matA[3 * n - 1][3 * (n - 1)] = 6 / (dT[n - 1] * dT[n - 1]);
-    matA[3 * n - 1][3 * (n - 1) + 1] = 2 / (dT[n - 1] * dT[n - 1]);
+    matA[3 * n - 2][1] = 1;
+    matA[3 * n - 1][3 * (n - 1)] = 3 * dT[n - 1];
+    matA[3 * n - 1][3 * (n - 1) + 1] = 1;
 
     const matAInv = this._inverseMatrix(matA);
     const coeff = this._matrixMultiply(matAInv, vecC);
@@ -315,13 +316,13 @@ class SplineInterpolationEngine {
         }
       }
 
-      const hv = (tv - t[kk]) / dT[kk];
+      const localT = tv - t[kk];
       const a = coeff[3 * kk][0];
       const b = coeff[3 * kk + 1][0];
       const c = coeff[3 * kk + 2][0];
       const d = vals[kk];
 
-      const vv = a * hv * hv * hv + b * hv * hv + c * hv + d;
+      const vv = a * localT * localT * localT + b * localT * localT + c * localT + d;
       interpolated.push(vv);
     }
 

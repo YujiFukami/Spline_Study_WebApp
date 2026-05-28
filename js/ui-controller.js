@@ -262,7 +262,7 @@ class UIController {
    */
   displayLearningContent(result) {
     const n = result.details.n;
-    const component = result.mode === 'closed' ? this.currentComponent : 'x';
+    const component = (result.mode === 'closed' || result.mode === 'parametric') ? this.currentComponent : 'y';
     const activeEngine = this._activeEngine(result);
     this.updateComponentSelector(result);
     this.updateClosedLearningText(result.mode, component, result);
@@ -350,11 +350,7 @@ class UIController {
     // ---- STEP 2: 各区間の係数（a_k, b_k, c_k, d_k）----
     const step2El = document.getElementById('val-step2');
     if (step2El) {
-      if (result.mode === 'closed') {
-        step2El.innerHTML = this._renderKnownConstantTable(result, component);
-      } else {
-        step2El.innerHTML = this._renderIntervalCoefficientTable(activeEngine ? activeEngine.coefficients : result.coefficients, n, result, component);
-      }
+      step2El.innerHTML = this._renderKnownConstantTable(result, component);
     }
 
     // ---- STEP 3: 行列方程式（一般式＋実際の値）----
@@ -390,13 +386,11 @@ class UIController {
     if (step4El) {
       const coeff = activeEngine ? activeEngine.coefficients : result.coefficients;
       const vectorHtml = this._renderCoefficientVector(coeff, n, result, component);
-      const coeffHtml = result.mode === 'closed'
-        ? `
+      const coeffHtml = `
           <div style="margin-top:18px; border-top:1px solid #e0e0e0; padding-top:14px;">
             <div class="theory-col-head">計算結果（各区間の係数）</div>
             ${this._renderIntervalCoefficientTable(coeff, n, result, component)}
-          </div>`
-        : '';
+          </div>`;
       step4El.innerHTML = vectorHtml + coeffHtml;
     }
 
@@ -416,7 +410,7 @@ class UIController {
           const x1 = result.originalPoints[k+1].x;
           dVal = result.originalPoints[k].y;
           rangeLabel = `x ∈ [${this._fmtNum(x0)}, ${this._fmtNum(x1)}]`;
-          hDef = `h = (x − ${this._fmtNum(x0)}) / ${this._fmtNum(result.intervals[k])}`;
+          hDef = `localX = x − ${this._fmtNum(x0)}（0 ≤ localX ≤ ${this._fmtNum(result.intervals[k])}）`;
         } else if (result.mode === 'closed') {
           const t0 = result.parameters[k];
           const t1 = result.parameters[k+1];
@@ -426,10 +420,9 @@ class UIController {
         } else {
           const t0 = result.parameters[k];
           const t1 = result.parameters[k+1];
-          // パラメトリックは x(t), y(t) 両方の係数を持つが、ここでは x(t) 側を表示
-          dVal = result.originalPoints[k].x;
+          dVal = this._componentPointValue(result, k, component);
           rangeLabel = `t ∈ [${this._fmtNum(t0)}, ${this._fmtNum(t1)}]`;
-          hDef = `h = (t − ${this._fmtNum(t0)}) / ${this._fmtNum(result.intervals[k])}`;
+          hDef = `localT = t − ${this._fmtNum(t0)}（0 ≤ localT ≤ ${this._fmtNum(result.intervals[k])}）`;
         }
 
         const aSign = b >= 0 ? '+' : '−';
@@ -439,8 +432,8 @@ class UIController {
         const dSign = dVal >= 0 ? '+' : '−';
         const dAbs  = Math.abs(dVal);
 
-        const componentName = result.mode === 'closed' ? component.toUpperCase() : 'S';
-        const suffix = result.mode === 'closed' ? this._componentSuffix(result, component) : '';
+        const componentName = result.mode === 'closed' ? component.toUpperCase() : (result.mode === 'parametric' ? component : 'f');
+        const suffix = (result.mode === 'closed' || result.mode === 'parametric') ? this._componentSuffix(result, component) : '';
         if (result.mode === 'closed') {
           const q = component === 'y' ? 'y' : 'x';
           html += `
@@ -467,48 +460,23 @@ class UIController {
           continue;
         }
 
+        const localSymbol = result.mode === 'normal' ? 'localX' : 'localT';
         html += `
           <div style="background:#f9f9f9; padding:14px; border-left:3px solid #0066cc; margin-bottom:14px; border-radius:4px;">
             <p style="font-weight:600; margin-bottom:6px;">区間 k = ${k}　（${rangeLabel}）</p>
             <p style="font-family:'Courier New',monospace; line-height:1.8;">
-              ${componentName}<sub>${k}</sub>(h) =
-                a<sub>${suffix}${k}</sub>·h³ +
-                b<sub>${suffix}${k}</sub>·h² +
-                c<sub>${suffix}${k}</sub>·h +
+              ${componentName}<sub>${k}</sub>(${result.mode === 'normal' ? 'x' : 't'}) =
+                a<sub>${suffix}${k}</sub>·${localSymbol}³ +
+                b<sub>${suffix}${k}</sub>·${localSymbol}² +
+                c<sub>${suffix}${k}</sub>·${localSymbol} +
                 d<sub>${suffix}${k}</sub><br>
-              ${componentName}<sub>${k}</sub>(h) = ${this._fmtNum(a)}·h³
-                ${aSign} ${this._fmtNum(bAbs)}·h²
-                ${cSign} ${this._fmtNum(cAbs)}·h
+              ${componentName}<sub>${k}</sub>(${result.mode === 'normal' ? 'x' : 't'}) = ${this._fmtNum(a)}·${localSymbol}³
+                ${aSign} ${this._fmtNum(bAbs)}·${localSymbol}²
+                ${cSign} ${this._fmtNum(cAbs)}·${localSymbol}
                 ${dSign} ${this._fmtNum(dAbs)}
             </p>
-            <p style="font-size:0.88rem; color:#666; margin-top:6px;">※ ${hDef}${result.mode === 'closed' ? '' : '　（0 ≤ h ≤ 1）'}</p>
+            <p style="font-size:0.88rem; color:#666; margin-top:6px;">※ ${hDef}</p>
           </div>`;
-        if (result.mode === 'parametric') {
-          // y(t) 側の係数も表示
-          const yCoeff = result.yEngine ? result.yEngine.coefficients : null;
-          if (yCoeff) {
-            const ay = yCoeff[3*k][0];
-            const by = yCoeff[3*k+1][0];
-            const cy = yCoeff[3*k+2][0];
-            const dy = result.originalPoints[k].y;
-            const aySign = by >= 0 ? '+' : '−';
-            const byAbs  = Math.abs(by);
-            const cySign = cy >= 0 ? '+' : '−';
-            const cyAbs  = Math.abs(cy);
-            const dySign = dy >= 0 ? '+' : '−';
-            const dyAbs  = Math.abs(dy);
-            html += `
-              <div style="background:#f0f8f0; padding:14px; border-left:3px solid #51cf66; margin-bottom:14px; margin-top:-10px; border-radius:4px;">
-                <p style="font-weight:600; margin-bottom:6px; color:#2f7a3a;">y(t) の補間式（同区間）</p>
-                <p style="font-family:'Courier New',monospace; line-height:1.8;">
-                  y<sub>${k}</sub>(h) = ${this._fmtNum(ay)}·h³
-                    ${aySign} ${this._fmtNum(byAbs)}·h²
-                    ${cySign} ${this._fmtNum(cyAbs)}·h
-                    ${dySign} ${this._fmtNum(dyAbs)}
-                </p>
-              </div>`;
-          }
-        }
       }
       step5El.innerHTML = html;
     }
@@ -552,7 +520,9 @@ class UIController {
 
     let html = '<div style="overflow-x:auto;">';
     if (mode === 'closed') {
-      html += this._conditionLegendHtml();
+      html += this._conditionLegendHtml(mode);
+    } else {
+      html += this._conditionLegendHtml(mode);
     }
     html += '<table class="matrix-table">';
     html += `<tr><th colspan="${size+1}" style="font-size:0.8rem;">係数行列 [A]（${size}×${size}）— 非ゼロ成分のみ表示</th></tr>`;
@@ -608,41 +578,41 @@ class UIController {
       return '0';
     }
 
-    // 行分類
+    const delta = mode === 'parametric' ? 'Δt' : 'Δh';
     // 補間条件: row 0 .. n-1
     if (i < n) {
       const k = i;
-      if (j === 3*k)   return '1';
-      if (j === 3*k+1) return '1';
-      if (j === 3*k+2) return '1';
+      if (j === 3*k)   return `${delta}<sub>k</sub>³`;
+      if (j === 3*k+1) return `${delta}<sub>k</sub>²`;
+      if (j === 3*k+2) return `${delta}<sub>k</sub>`;
       return '0';
     }
     // 1階連続: row n .. 2n-2
     if (i < 2*n - 1) {
       const k = i - n;
-      if (j === 3*k)     return '3/Δh<sub>k</sub>';
-      if (j === 3*k+1)   return '2/Δh<sub>k</sub>';
-      if (j === 3*k+2)   return '1/Δh<sub>k</sub>';
-      if (j === 3*(k+1)+2) return '−1/Δh<sub>k+1</sub>';
+      if (j === 3*k)     return `3${delta}<sub>k</sub>²`;
+      if (j === 3*k+1)   return `2${delta}<sub>k</sub>`;
+      if (j === 3*k+2)   return '1';
+      if (j === 3*(k+1)+2) return '−1';
       return '0';
     }
     // 2階連続: row 2n-1 .. 3n-3
     if (i < 3*n - 2) {
       const k = i - (2*n - 1);
-      if (j === 3*k)     return '6/Δh<sub>k</sub>²';
-      if (j === 3*k+1)   return '2/Δh<sub>k</sub>²';
-      if (j === 3*(k+1)+1) return '−2/Δh<sub>k+1</sub>²';
+      if (j === 3*k)     return `3${delta}<sub>k</sub>`;
+      if (j === 3*k+1)   return '1';
+      if (j === 3*(k+1)+1) return '−1';
       return '0';
     }
     // 左境界: row 3n-2
     if (i === 3*n - 2) {
-      if (j === 1) return '2';
+      if (j === 1) return '1';
       return '0';
     }
     // 右境界: row 3n-1
     if (i === 3*n - 1) {
-      if (j === 3*(n-1))   return '6/Δh<sub>n-1</sub>²';
-      if (j === 3*(n-1)+1) return '2/Δh<sub>n-1</sub>²';
+      if (j === 3*(n-1))   return `3${delta}<sub>n-1</sub>`;
+      if (j === 3*(n-1)+1) return '1';
       return '0';
     }
     return '0';
@@ -662,7 +632,8 @@ class UIController {
       for (let k = 0; k < n; k++) entries.push('0');
       for (let k = 0; k < n; k++) entries.push('0');
     } else {
-      for (let k = 0; k < n; k++)   entries.push(`y<sub>${k+1}</sub> − y<sub>${k}</sub>`);
+      const q = mode === 'parametric' ? component : 'y';
+      for (let k = 0; k < n; k++)   entries.push(`${q}<sub>${k+1}</sub> − ${q}<sub>${k}</sub>`);
       for (let k = 0; k < n-1; k++) entries.push('0');
       for (let k = 0; k < n-1; k++) entries.push('0');
       entries.push('0');  // 左境界
@@ -671,7 +642,7 @@ class UIController {
 
     let html = '<div style="display:inline-block; overflow-x:auto;">';
     if (mode === 'closed') {
-      html += this._conditionLegendHtml();
+      html += this._conditionLegendHtml(mode);
     }
     html += '<table class="matrix-table" style="width:auto;">';
     html += `<tr><th colspan="2" ${cellStyle}>右辺ベクトル [b]（${size}成分）</th></tr>`;
@@ -757,13 +728,15 @@ class UIController {
 
   _renderKnownConstantTable(result, component = 'x') {
     const n = result.details.n;
-    const q = component === 'y' ? 'y' : 'x';
+    const q = result.mode === 'normal' ? 'y' : (component === 'y' ? 'y' : 'x');
     const cellStyle = 'style="padding:4px 8px; font-size:0.82rem;"';
+    const funcLabel = result.mode === 'normal' ? 'f_k' : `${q}_k`;
+    const argLabel = result.mode === 'normal' ? 'x_k' : 't_k';
     let html = `
       <p class="closed-step-note">
-        始点条件 \\(F_{${q},k}(t_k)=${q}_k\\) より、定数項は
-        \\(d_{${q},k}=${q}_k\\) と確定します。ここではまだ
-        \\(a_{${q},k}, b_{${q},k}, c_{${q},k}\\) は求めず、次のSTEPで条件式を行列に入れます。
+        始点条件 \\(${funcLabel}(${argLabel})=${q}_k\\) より、定数項は
+        \\(d_k=${q}_k\\) と確定します。ここではまだ
+        \\(a_k, b_k, c_k\\) は求めず、次のSTEPで条件式を行列に入れます。
       </p>
       <div style="overflow-x:auto; display:inline-block;">
       <table class="matrix-table" style="width:auto;">
@@ -774,12 +747,12 @@ class UIController {
       html += `<tr>
         <td ${cellStyle}>${k}</td>
         <td ${cellStyle}>${q}<sub>${k}</sub></td>
-        <td ${cellStyle}>d<sub>${q},${k}</sub> = ${q}<sub>${k}</sub></td>
-        ${this._detailCell(this._fmtNum(d), `定数項 d_${q},${k}`, [
+        <td ${cellStyle}>d<sub>${this._componentSuffix(result, component)}${k}</sub> = ${q}<sub>${k}</sub></td>
+        ${this._detailCell(this._fmtNum(d), `定数項 d_${this._componentSuffix(result, component)}${k}`, [
           ['条件', `区間 k=${k} の始点条件`],
-          ['一般式', `F_${q},${k}(t_${k}) = ${q}_${k} = d_${q},${k}`],
+          ['一般式', `${funcLabel}(${argLabel}) = ${q}_${k} = d_${this._componentSuffix(result, component)}${k}`],
           ['代入', `${q}_${k} = ${this._fmtNum(d)}`],
-          ['結果', `d_${q},${k} = ${this._fmtNum(d)}`]
+          ['結果', `d_${this._componentSuffix(result, component)}${k} = ${this._fmtNum(d)}`]
         ], cellStyle)}
       </tr>`;
     }
@@ -959,11 +932,12 @@ class UIController {
   _matrixIntervalNote(row, col, result) {
     const n = result.details.n;
     const intervals = result.intervals || [];
-    if (row < n) return '補間条件の係数なので正規化後の 1 を使用します。';
+    const delta = result.mode === 'parametric' ? 'Δt' : 'Δh';
     const k = Math.floor(col / 3);
     const h = intervals[k];
     if (h === undefined) return 'このセルは境界条件またはゼロ成分です。';
-    return `Δ = ${this._fmtNum(h)}（列 ${this._coefficientNameFromColumn(col)} の区間幅）`;
+    if (row < n) return `${delta}_${k} = ${this._fmtNum(h)}（終点通過条件の係数）`;
+    return `${delta}_${k} = ${this._fmtNum(h)}（列 ${this._coefficientNameFromColumn(col)} の区間幅）`;
   }
 
   _rhsExpression(row, result, component = 'x') {
@@ -973,7 +947,8 @@ class UIController {
       return '0';
     }
     if (row < n) {
-      return result.mode === 'normal' ? `y_${row + 1} - y_${row}` : `x_${row + 1} - x_${row}`;
+      const q = result.mode === 'normal' ? 'y' : component;
+      return `${q}_${row + 1} - ${q}_${row}`;
     }
     return '0';
   }
@@ -992,13 +967,13 @@ class UIController {
       const next = result.originalPoints[row + 1].y;
       return `${this._fmtNum(next)} - ${this._fmtNum(current)}`;
     }
-    const current = result.originalPoints[row].x;
-    const next = result.originalPoints[row + 1].x;
+    const current = this._componentPointValue(result, row, component);
+    const next = this._componentPointValue(result, row + 1, component);
     return `${this._fmtNum(next)} - ${this._fmtNum(current)}`;
   }
 
   _activeEngine(result) {
-    if (result.mode !== 'closed') return null;
+    if (result.mode !== 'closed' && result.mode !== 'parametric') return null;
     return this.currentComponent === 'y' ? result.yEngine : result.xEngine;
   }
 
@@ -1008,7 +983,7 @@ class UIController {
   }
 
   _componentSuffix(result, component = 'x') {
-    if (result.mode !== 'closed') return '';
+    if (result.mode !== 'closed' && result.mode !== 'parametric') return '';
     return `${component},`;
   }
 
@@ -1021,7 +996,7 @@ class UIController {
   updateComponentSelector(result = this.currentResult) {
     const selector = document.getElementById('componentSelector');
     if (!selector) return;
-    const show = result?.mode === 'closed';
+    const show = result?.mode === 'closed' || result?.mode === 'parametric';
     selector.style.display = show ? 'inline-flex' : 'none';
     selector.querySelectorAll('.component-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.component === this.currentComponent);
@@ -1031,7 +1006,7 @@ class UIController {
   updateConditionCards(mode) {
     document.querySelectorAll('.cond-item').forEach((item, index) => {
       item.classList.remove('condition-card-position', 'condition-card-first', 'condition-card-second', 'condition-card-boundary');
-      if (mode !== 'closed') return;
+      if (!mode) return;
       if (index === 0) item.classList.add('condition-card-position');
       if (index === 1) item.classList.add('condition-card-first');
       if (index === 2) item.classList.add('condition-card-second');
@@ -1086,6 +1061,47 @@ class UIController {
           下の行列では、この「最後→最初」の2行を通常の周期条件より濃い色で表示しています。
           左側の先頭区間の列に -1 が出る理由を、上の式と見比べて確認できます。
         </p>
+      </div>`;
+  }
+
+  _openSplineDerivationHtml(mode, component = 'y', n = 0) {
+    const isParam = mode === 'parametric';
+    const q = isParam ? component : 'y';
+    const independent = isParam ? 't' : 'x';
+    const delta = isParam ? '\\Delta t_k' : '\\Delta h_k';
+    const countText = n > 0 ? `${n}` : 'N';
+    const threeNText = n > 0 ? `${3 * n}` : '3N';
+    const functionName = isParam ? `${q}_k(t)` : 'f_k(x)';
+    const valueName = isParam ? q : 'y';
+    return `
+      <div class="closed-derivation-block">
+        <div class="closed-derivation-title">条件式を行列に入れる前の導出</div>
+        <p>
+          参考記事の流れに合わせ、まず各区間の三次式を局所変位で置きます。
+          区間数は \\(N=${countText}\\)、未知数は各区間の
+          \\(a_k,b_k,c_k\\) の3種類なので \\(${threeNText}\\) 個です。
+          始点通過条件から \\(d_k=${valueName}_k\\) は既知として扱います。
+        </p>
+        <div class="closed-equation-list">
+          <div class="closed-equation-card condition-card-position">
+            <strong>終点通過条件</strong>
+            <div class="formula-inline">\\(${functionName}=a_k(${independent}-${independent}_k)^3+b_k(${independent}-${independent}_k)^2+c_k(${independent}-${independent}_k)+d_k\\)</div>
+            <div class="formula-inline">\\(a_k${delta}^3+b_k${delta}^2+c_k${delta}=${valueName}_{k+1}-${valueName}_k\\)</div>
+            <p>この行が右辺ベクトルの差分値を持つ行です。</p>
+          </div>
+          <div class="closed-equation-card condition-card-first">
+            <strong>1階導関数連続</strong>
+            <div class="formula-inline">\\(f'_k(${independent}_{k+1})=f'_{k+1}(${independent}_{k+1})\\)</div>
+            <div class="formula-inline">\\(3a_k${delta}^2+2b_k${delta}+c_k-c_{k+1}=0\\)</div>
+            <p>隣の区間と接線方向が一致するように係数を結びます。</p>
+          </div>
+          <div class="closed-equation-card condition-card-second">
+            <strong>2階導関数連続と自然境界</strong>
+            <div class="formula-inline">\\(3a_k${delta}+b_k-b_{k+1}=0\\)</div>
+            <div class="formula-inline">\\(b_0=0,\\quad 3a_{N-1}${delta}+b_{N-1}=0\\)</div>
+            <p>曲率のつながりと、両端の2階微分が0になる自然境界条件を入れます。</p>
+          </div>
+        </div>
       </div>`;
   }
 
@@ -1165,50 +1181,94 @@ class UIController {
       return;
     }
 
-    if (step1Title) step1Title.innerHTML = 'STEP 1　区間幅 Δh<sub>k</sub> の計算';
-    if (step2Title) step2Title.innerHTML = 'STEP 2　区間内の 3 次補間式';
-    if (step2Desc) step2Desc.innerHTML = `第 k 区間の補間式（\\(d_k = y_k\\) は既知）：`;
-    if (step2Formula) step2Formula.innerHTML = `$$ S_k(h) = a_k h^3 + b_k h^2 + c_k h + d_k $$`;
-    if (step2Note) step2Note.innerHTML = `未知係数は各区間につき <strong>a<sub>k</sub>, b<sub>k</sub>, c<sub>k</sub></strong> の 3 つ。
-            N−1 区間合計で <strong>3(N−1)</strong> 個の未知数となります。`;
-    if (step2ValuesHead) step2ValuesHead.textContent = '実際の値（各区間の係数）';
-    if (step3Intro) step3Intro.innerHTML = '3(N−1) 個の未知数を求めるため、以下の条件から同数の方程式を立てます：';
-    if (derivation) {
-      derivation.style.display = 'none';
-      derivation.innerHTML = '';
-    }
+    const isParam = mode === 'parametric';
+    const q = isParam ? component : 'y';
+    const label = isParam ? (component === 'y' ? 'Y(t)' : 'X(t)') : 'Y = f(X)';
+    const n = result?.details?.n ?? 0;
+    const countText = n > 0 ? `${n}` : 'N';
+    const threeNText = n > 0 ? `${3 * n}` : '3N';
+    const delta = isParam ? '\\Delta t_k' : '\\Delta h_k';
+    const varName = isParam ? 't' : 'x';
+    const deltaText = isParam ? 'Δt' : 'Δh';
+
+    if (step1Title) step1Title.innerHTML = isParam ? 'STEP 1　点列とパラメータ t の定義' : 'STEP 1　点列の定義と区間幅 Δh<sub>k</sub>';
     if (summary) {
-      summary.style.display = 'none';
-      summary.innerHTML = '';
+      summary.style.display = 'block';
+      summary.innerHTML = `
+        <p><strong>${isParam ? `パラメトリック補間では ${label} 側の点列を、共通パラメータ t に対して補間します。` : '通常補間では x が単調増加する点列を対象に、y=f(x) として補間します。'}</strong></p>
+        <div class="unknown-count-grid">
+          <div class="unknown-count-item">区間数<strong>N = ${countText}</strong></div>
+          <div class="unknown-count-item">未知係数<strong>3N = ${threeNText} 個</strong></div>
+          <div class="unknown-count-item">条件式<strong>3N = ${threeNText} 本</strong></div>
+        </div>
+        <p>
+          始点通過条件で定数項 \\(d_k\\) が既知になるため、行列で解く未知数は
+          \\(a_k,b_k,c_k\\) の3種類です。
+        </p>`;
     }
-    if (positionFormula) positionFormula.innerHTML = `\\(a_k + b_k + c_k = y_{k+1} - y_k\\)`;
-    if (firstFormula) firstFormula.innerHTML = `\\(\\dfrac{3a_k+2b_k+c_k}{\\Delta h_k} = \\dfrac{c_{k+1}}{\\Delta h_{k+1}}\\)`;
-    if (secondFormula) secondFormula.innerHTML = `\\(\\dfrac{6a_k+2b_k}{\\Delta h_k^2} = \\dfrac{2b_{k+1}}{\\Delta h_{k+1}^2}\\)`;
-    if (boundaryFormula) boundaryFormula.innerHTML = `\\(b_0 = 0,\\quad \\dfrac{6a_{N-2}+2b_{N-2}}{\\Delta h_{N-2}^2} = 0\\)`;
-    if (step1Desc) step1Desc.innerHTML = `隣り合う入力点の X 座標（またはパラメータ t）の差を<strong>区間幅</strong>と呼びます：`;
-    if (step1Formula) step1Formula.innerHTML = `$$ \\Delta h_k = x_{k+1} - x_k \\quad (k = 0, 1, \\ldots, N-2) $$`;
-    if (step1Note) step1Note.innerHTML = `各区間の補間式は、この Δh<sub>k</sub> で正規化されたパラメータ
-              \\(h = \\dfrac{x - x_k}{\\Delta h_k}\\)（\\(0 \\le h \\le 1\\)）で書かれます。
-              h = 0 が始点 \\(x_k\\)、h = 1 が終点 \\(x_{k+1}\\) です。`;
+    if (step2Title) step2Title.innerHTML = 'STEP 2　区間内の 3 次補間式';
+    if (step2Desc) step2Desc.innerHTML = `第 k 区間では、参考記事の式に合わせて左端からの局所変位で三次式を置きます。`;
+    if (step2Formula) step2Formula.innerHTML = `
+      $$ ${isParam ? `${q}_k(t)` : 'f_k(x)'} = a_k(${varName}-${varName}_k)^3 + b_k(${varName}-${varName}_k)^2 + c_k(${varName}-${varName}_k) + d_k $$
+      $$ d_k = ${q}_k $$
+    `;
+    if (step2Note) step2Note.innerHTML = `
+      \\(d_k\\) は始点の値として既知です。残る \\(a_k,b_k,c_k\\) を、
+      終点通過・1階導関数連続・2階導関数連続・自然境界条件から求めます。
+    `;
+    if (step2ValuesHead) step2ValuesHead.textContent = '実際の値（既知の定数項 d）';
+    if (step3Intro) step3Intro.innerHTML = `
+      STEP2で \\(d_k\\) が既知になったため、残る \\(3N\\) 個の未知係数を、以下の条件式から求めます。
+    `;
+    if (derivation) {
+      derivation.style.display = 'block';
+      derivation.innerHTML = this._openSplineDerivationHtml(mode, component, n);
+    }
+    if (positionFormula) positionFormula.innerHTML = `\\(a_k${delta}^3 + b_k${delta}^2 + c_k${delta} = ${q}_{k+1} - ${q}_k\\)`;
+    if (firstFormula) firstFormula.innerHTML = `\\(3a_k${delta}^2 + 2b_k${delta} + c_k - c_{k+1} = 0\\)`;
+    if (secondFormula) secondFormula.innerHTML = `\\(3a_k${delta} + b_k - b_{k+1} = 0\\)`;
+    if (boundaryFormula) boundaryFormula.innerHTML = `\\(b_0 = 0,\\quad 3a_{N-1}${delta} + b_{N-1} = 0\\)`;
+    if (step1Desc) step1Desc.innerHTML = isParam
+      ? `入力点に整数パラメータ \\(t_k=k\\) を割り当て、${label} 側の値を独立に補間します。`
+      : `隣り合う入力点の X 座標の差を<strong>区間幅</strong>と呼びます：`;
+    if (step1Formula) step1Formula.innerHTML = isParam
+      ? `$$ t_k = k, \\quad ${delta} = t_{k+1} - t_k = 1 \\quad (k = 0, 1, \\ldots, N-1) $$`
+      : `$$ ${delta} = x_{k+1} - x_k \\quad (k = 0, 1, \\ldots, N-1) $$`;
+    if (step1Note) step1Note.innerHTML = isParam
+      ? `\\(x(t)\\) と \\(y(t)\\) は同じ係数行列で別々に解きます。表示成分を切り替えると右辺ベクトルと係数が切り替わります。`
+      : `区間 k の式は左端からの局所変位 \\(localX = x - x_k\\) で書かれます。`;
   }
 
   _conditionRowClass(row, n, mode) {
-    if (mode !== 'closed') return '';
     if (row < n) return 'row-condition-position';
-    if (row < 2 * n) {
-      return row === 2 * n - 1 ? 'row-condition-first-loop' : 'row-condition-first';
+    if (mode === 'closed') {
+      if (row < 2 * n) {
+        return row === 2 * n - 1 ? 'row-condition-first-loop' : 'row-condition-first';
+      }
+      return row === 3 * n - 1 ? 'row-condition-second-loop' : 'row-condition-second';
     }
-    return row === 3 * n - 1 ? 'row-condition-second-loop' : 'row-condition-second';
+    if (row < 2 * n - 1) return 'row-condition-first';
+    if (row < 3 * n - 2) return 'row-condition-second';
+    return 'row-condition-boundary';
   }
 
-  _conditionLegendHtml() {
+  _conditionLegendHtml(mode = 'closed') {
+    if (mode === 'closed') {
+      return `
+        <div class="condition-legend">
+          <span><i class="legend-position"></i>位置条件</span>
+          <span><i class="legend-first"></i>1階周期条件</span>
+          <span><i class="legend-first-loop"></i>1階周期条件（最後→最初）</span>
+          <span><i class="legend-second"></i>2階周期条件</span>
+          <span><i class="legend-second-loop"></i>2階周期条件（最後→最初）</span>
+        </div>`;
+    }
     return `
       <div class="condition-legend">
-        <span><i class="legend-position"></i>位置条件</span>
-        <span><i class="legend-first"></i>1階周期条件</span>
-        <span><i class="legend-first-loop"></i>1階周期条件（最後→最初）</span>
-        <span><i class="legend-second"></i>2階周期条件</span>
-        <span><i class="legend-second-loop"></i>2階周期条件（最後→最初）</span>
+        <span><i class="legend-position"></i>終点通過条件</span>
+        <span><i class="legend-first"></i>1階導関数連続</span>
+        <span><i class="legend-second"></i>2階導関数連続</span>
+        <span><i class="legend-boundary"></i>自然境界条件</span>
       </div>`;
   }
 
